@@ -1,6 +1,6 @@
 import daemon
 
-from . import queue
+import queuer
 
 with daemon.DaemonContext():
-    queue()
+    queuer()

@@ -1,8 +1,8 @@
-import queue, datetime
+import queuer, datetime
 
 def queue_test():
     print("Perform queue_test()")
-    q = queue.Queue()
+    q = queuer.Queue()
     value = 8
     q.insert(value)
     value = 3
@@ -27,7 +27,7 @@ def queue_test():
 
 def date_test():
     print("Perform date_test()")
-    q = queue.Queue()
+    q = queuer.Queue()
 
     value = datetime.datetime.now()
     offset = datetime.timedelta(days=8)
