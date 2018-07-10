@@ -3,13 +3,16 @@
 #
 ###############################################################################
 
-import datetime, signal, daemon, subprocess
+import datetime, signal, daemon, subprocess, sys
+from py_core import logger
+
 
 class Node():
     """
     Node Class.
     """
     next_node = None
+    identifier = 0
     value = 0
 
     def __init__(self, data):
@@ -72,9 +75,42 @@ class Queue():
             pass
 
 
-def configure():
-    # Create a queue to pass to the main loop.
-    return Queue()
+class Streams():
+    """
+    stdin, stdout, stderr class.
+    """
+    out_original = ''
+    err_original = ''
+    def __init__(self):
+        print("init")
+        self.config_out()
+        self.config_err()
+
+    def config_out(self):
+        print("config")
+        # Redirect the standard output
+        self.out_original = sys.stdout
+        self.osock = open("output.log", "w")
+        sys.stdout = self.osock
+
+    def config_err(self):
+        print("config")
+        self.err_original = sys.stderr
+        self.fsock = open("error.log", "w")
+        sys.stderr = self.fsock
+
+    def close(self):
+        print("close_streams")
+        if self.out_original:
+            sys.stdout = self.out_original
+        if self.err_original:
+            sys.stderr = self.err_original
+
+
+def end_runtime(signum, frame):
+    print("\n\nUser ended runtime.")
+    #print(dir(frame))
+    sys.exit(signum)
 
 def test_inserts(q):
     print("test_inserts")
@@ -82,35 +118,45 @@ def test_inserts(q):
     print(value)
     # This is the main loop of the program. One of the functions run by it will
     # need to check for any interrupt signals.
-    while value < 5:
+    while value < 2:
+        if value == 0:
+            print(datetime.datetime.now())
         value += 1
         print(value)
-        data = ( datetime.datetime.now()
-                + datetime.timedelta(seconds= value + 2)
-                )
+        data = datetime.datetime.now()
+        offset = datetime.timedelta(seconds = value + 0)
+        data = data + offset
         q.insert(data)
-
     return q
 
-def main_loop(q):
-    print("main_loop")
+def signal_check():
+    print("signal_check")
+    sys.exit()
 
-    q = test_inserts(q)
-    q.print_nodes()
-
+def _main_loop(q, streams):
+    print("_main_loop")
     while True:
         # This is the main loop of the program. One of the functions run by it will
         # need to check for any interrupt signals.
         q.expire()
         if not q.head:
             print("No more nodes.")
+            streams.close()
             break
 
     q.print_nodes()
 
 def main():
-    mail_queue = configure()
-    main_loop(mail_queue)
+    print("Initializing pipes")
+    s = Streams()
+    print("Initialized system.")
+
+    signal.signal(signal.SIGINT, end_runtime)
+
+    mail_queue = Queue()
+    mail_queue = test_inserts(mail_queue)
+    mail_queue.print_nodes()
+    _main_loop(mail_queue, s)
 
 if __name__ == "__main__":
     main()
