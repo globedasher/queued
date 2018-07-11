@@ -3,7 +3,8 @@
 #
 ###############################################################################
 
-import datetime, signal, daemon, subprocess, sys
+import datetime, signal, subprocess, sys
+from multiprocessing.connection import Listener
 from py_core import logger
 
 
@@ -81,10 +82,11 @@ class Streams():
     """
     out_original = ''
     err_original = ''
+
     def __init__(self):
         print("init")
-        self.config_out()
-        self.config_err()
+        #self.config_out()
+        #self.config_err()
 
     def config_out(self):
         print("config")
@@ -106,11 +108,14 @@ class Streams():
         if self.err_original:
             sys.stderr = self.err_original
 
+    def end_runtime(self, signum, frame):
+        print("\n\nUser ended runtime.")
+        self.close()
+        print("\n\nUser ended runtime.")
+        #print(dir(frame))
+        sys.exit(signum)
 
-def end_runtime(signum, frame):
-    print("\n\nUser ended runtime.")
-    #print(dir(frame))
-    sys.exit(signum)
+
 
 def test_inserts(q):
     print("test_inserts")
@@ -133,14 +138,15 @@ def signal_check():
     print("signal_check")
     sys.exit()
 
+
 def _main_loop(q, streams):
     print("_main_loop")
+
     while True:
         # This is the main loop of the program. One of the functions run by it will
         # need to check for any interrupt signals.
         q.expire()
         if not q.head:
-            print("No more nodes.")
             streams.close()
             break
 
@@ -148,10 +154,12 @@ def _main_loop(q, streams):
 
 def main():
     print("Initializing pipes")
+    print("Review output.log and error.log for more information.")
+
     s = Streams()
     print("Initialized system.")
 
-    signal.signal(signal.SIGINT, end_runtime)
+    signal.signal(signal.SIGINT, s.end_runtime)
 
     mail_queue = Queue()
     mail_queue = test_inserts(mail_queue)
