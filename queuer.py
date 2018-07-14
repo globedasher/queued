@@ -3,8 +3,8 @@
 #
 ###############################################################################
 
-import datetime, signal, subprocess, sys
-from multiprocessing.connection import Listener
+import datetime, signal, subprocess, sys, zmq, time
+from multiprocessing import Process
 from py_core import logger
 
 
@@ -68,7 +68,7 @@ class Queue():
 
     def expire(self):
         #print("Check for expired node")
-        if self.head.value <= datetime.datetime.now():
+        if self.head and self.head.value <= datetime.datetime.now():
             print("Expiring node", self.head.value)
             self.head = self.head.next_node
         else:
@@ -84,7 +84,7 @@ class Streams():
     err_original = ''
 
     def __init__(self):
-        print("init")
+        print("Initializing system.")
         #self.config_out()
         #self.config_err()
 
@@ -115,6 +115,11 @@ class Streams():
         #print(dir(frame))
         sys.exit(signum)
 
+class ControlComms():
+
+    def __init__(self):
+        print("Creating Controls")
+
 
 
 def test_inserts(q):
@@ -134,37 +139,60 @@ def test_inserts(q):
         q.insert(data)
     return q
 
-def signal_check():
-    print("signal_check")
-    sys.exit()
+def comms_loop():
+    print("comms_loop")
+    context = zmq.Context()
+    socket = context.socket(zmq.REP)
+    socket.bind("ipc:///tmp/myserver")
+    while True:
+        message = socket.recv()
+        print("Recieved request: %s" % message)
+        socket.send(b"World")
+        #sys.exit()
 
-
-def _main_loop(q, streams):
+def main_loop(q, streams):
     print("_main_loop")
 
     while True:
         # This is the main loop of the program. One of the functions run by it will
         # need to check for any interrupt signals.
         q.expire()
+        time.sleep(.1)
         if not q.head:
-            streams.close()
-            break
+            #streams.close()
+            #break
+            pass
 
     q.print_nodes()
 
 def main():
-    print("Initializing pipes")
-    print("Review output.log and error.log for more information.")
+    streams = Streams()
 
-    s = Streams()
-    print("Initialized system.")
-
-    signal.signal(signal.SIGINT, s.end_runtime)
+    signal.signal(signal.SIGINT, streams.end_runtime)
 
     mail_queue = Queue()
     mail_queue = test_inserts(mail_queue)
     mail_queue.print_nodes()
-    _main_loop(mail_queue, s)
+
+    print("Starting")
+
+    #while True:
+    #    mail_queue.expire()
+    #    if not mail_queue.head:
+    #        streams.close()
+    #        break
+
+    #    #message = s.socket.recv()
+    #    #print("Recieved request: %s" % message)
+    #    #s.socket.send(b"World")
+
+    #mail_queue.print_nodes()
+
+    cl = Process(target=comms_loop)
+    cl.start()
+
+    p = Process(target=main_loop, args=(mail_queue, streams))
+    p.start()
 
 if __name__ == "__main__":
     main()
