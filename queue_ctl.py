@@ -1,4 +1,4 @@
-import zmq
+import zmq, time
 
 context = zmq.Context()
 
@@ -8,9 +8,10 @@ rc = socket.connect("ipc:///tmp/myserver")
 print(rc)
 
 
-for request in range(10):
+for request in range(2):
     print("Sending request %s" % request)
-    socket.send(b"Hello")
+    socket.send(b"insert")
 
     message = socket.recv()
     print("Recieved reply %s [ %s ]" % (request, message))
+    time.sleep(1)

@@ -1,10 +1,10 @@
-# queue.py to make a queue
+# queuer.py to make a queue
 #
 #
 ###############################################################################
 
 import datetime, signal, subprocess, sys, zmq, time
-from multiprocessing import Process
+from multiprocessing import Process, Pipe
 from py_core import logger
 
 
@@ -20,9 +20,9 @@ class Node():
         self.value = data
 
 
-class Queue():
+class MailQueue():
     """
-    Queue class.
+    MailQueue class.
     """
     head = None
     def insert(self, value):
@@ -139,59 +139,67 @@ def test_inserts(q):
         q.insert(data)
     return q
 
-def comms_loop():
+def comms_loop(send_pipe):
     print("comms_loop")
-    context = zmq.Context()
-    socket = context.socket(zmq.REP)
-    socket.bind("ipc:///tmp/myserver")
+
+    listen_context = zmq.Context()
+    listen_socket = listen_context.socket(zmq.REP)
+    listen_socket.bind("ipc:///tmp/myserver")
+
     while True:
-        message = socket.recv()
+        message = listen_socket.recv()
         print("Recieved request: %s" % message)
-        socket.send(b"World")
+        listen_socket.send(b"World")
+
+        print("Here")
+        message = message.decode("utf-8")
+        print(message)
+        if message == "insert":
+            print("Over here")
+            send_pipe.send("insert")
         #sys.exit()
 
-def main_loop(q, streams):
-    print("_main_loop")
+def main_loop(mail_queue, streams, recv_pipe):
+    print("main_loop")
 
     while True:
         # This is the main loop of the program. One of the functions run by it will
         # need to check for any interrupt signals.
-        q.expire()
+        if recv_pipe.poll():
+            message = recv_pipe.recv()
+            print("Received message: %s" % message)
+            if message == "insert":
+                print("insert")
+                data = datetime.datetime.now()
+                offset = datetime.timedelta(seconds = 2)
+                data = data + offset
+                mail_queue.insert(data)
+
+        mail_queue.expire()
         time.sleep(.1)
-        if not q.head:
+        if not mail_queue.head:
             #streams.close()
             #break
             pass
 
-    q.print_nodes()
+    mail_queue.print_nodes()
 
 def main():
+    print("Starting")
+
     streams = Streams()
 
     signal.signal(signal.SIGINT, streams.end_runtime)
 
-    mail_queue = Queue()
+    mail_queue = MailQueue()
     mail_queue = test_inserts(mail_queue)
     mail_queue.print_nodes()
 
-    print("Starting")
-
-    #while True:
-    #    mail_queue.expire()
-    #    if not mail_queue.head:
-    #        streams.close()
-    #        break
-
-    #    #message = s.socket.recv()
-    #    #print("Recieved request: %s" % message)
-    #    #s.socket.send(b"World")
-
-    #mail_queue.print_nodes()
-
-    cl = Process(target=comms_loop)
+    recv_pipe, send_pipe = Pipe()
+    cl = Process(target=comms_loop, args=(send_pipe, ))
     cl.start()
 
-    p = Process(target=main_loop, args=(mail_queue, streams))
+    p = Process(target=main_loop, args=(mail_queue, streams, recv_pipe))
     p.start()
 
 if __name__ == "__main__":
