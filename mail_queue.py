@@ -184,16 +184,17 @@ def main_loop(mail_queue, streams, recv_pipe):
 
     mail_queue.print_nodes()
 
-def process_init():
-    print("Starting")
+def process_init(tests=False):
+    print("Starting as process")
 
     streams = Streams()
 
     signal.signal(signal.SIGINT, streams.end_runtime)
 
     mail_queue = MailQueue()
-    mail_queue = test_inserts(mail_queue)
-    mail_queue.print_nodes()
+    if tests:
+        mail_queue = test_inserts(mail_queue)
+        mail_queue.print_nodes()
 
     recv_pipe, send_pipe = Pipe()
     cl = Process(target=comms_loop, args=(send_pipe, ))
@@ -201,25 +202,6 @@ def process_init():
 
     p = Process(target=main_loop, args=(mail_queue, streams, recv_pipe))
     p.start()
-
-def get_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("-p"
-                        , "--process"
-                        , dest="selector"
-                        , default=""
-                        , help="Control style celector"
-                        )
-
-    parser.add_argument("-d"
-                        , "--details"
-                        , dest="questions"
-                        , default=""
-                        , help="Get help"
-                        )
-
-    return parser.parse_args()
 
 def controls():
     """
@@ -242,22 +224,46 @@ def controls():
         print("Recieved reply %s [ %s ]" % (request, message))
         time.sleep(1)
 
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    help_text = "Control style celector"
+    parser.add_argument("-p"
+                        , "--process"
+                        , dest="selector"
+                        , default=""
+                        , help=help_text
+                        )
+
+    help_text = "Use -t or --tests to run test inserts on startup."
+    parser.add_argument("-t"
+                        , "--tests"
+                        , dest="tests"
+                        , default="False"
+                        , help=help_text
+                        )
+
+    return parser.parse_args()
+
+
 
 def main():
 
     args = get_args()
+    #print(args)
 
-    print(args.selector, args.questions)
-
-    if args.questions == "help":
-        print("help is here")
-    elif args.selector == "process":
+    if args.selector == "process" and args.tests == "True":
+        print("process with tests")
+        process_init(True)
+    elif args.selector == "process" and args.tests == "False":
+        print("process")
         process_init()
     elif args.selector == "control":
         print("controls")
         controls()
 
-    print("End")
+    if args.selector != "process":
+        print("End")
 
 if __name__ == "__main__":
     main()
