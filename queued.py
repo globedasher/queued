@@ -1,6 +1,6 @@
 import daemon
 
-import queuer
+import mail_queue
 
 with daemon.DaemonContext():
-    queuer()
+    mail_queue()
