@@ -115,47 +115,46 @@ class Streams():
         #print(dir(frame))
         sys.exit(signum)
 
-class ControlComms():
 
+class ControlComms():
     def __init__(self):
         print("Creating Controls")
 
 
-
-def test_inserts(q):
+def test_inserts(mail_queue, tests):
     print("test_inserts")
     value = 0
-    print(value)
+    #print(value)
     # This is the main loop of the program. One of the functions run by it will
     # need to check for any interrupt signals.
-    while value < 2:
+    while value < tests:
         if value == 0:
             print(datetime.datetime.now())
         value += 1
-        print(value)
+        #print(value)
         data = datetime.datetime.now()
         offset = datetime.timedelta(seconds = value + 0)
         data = data + offset
-        q.insert(data)
-    return q
+        mail_queue.insert(data)
+    return mail_queue
 
 def comms_loop(send_pipe):
     print("comms_loop")
 
     listen_context = zmq.Context()
     listen_socket = listen_context.socket(zmq.REP)
-    listen_socket.bind("ipc:///tmp/myserver")
+    listen_socket.bind("ipc:///tmp/mail_queue_ipc")
 
     while True:
         message = listen_socket.recv()
         print("Recieved request: %s" % message)
         listen_socket.send(b"World")
 
-        print("Here")
+        #print("Here")
         message = message.decode("utf-8")
         print(message)
         if message == "insert":
-            print("Over here")
+            #print("Over here")
             send_pipe.send("insert")
         #sys.exit()
 
@@ -184,7 +183,7 @@ def main_loop(mail_queue, streams, recv_pipe):
 
     mail_queue.print_nodes()
 
-def process_init(tests=False):
+def process_init(tests):
     print("Starting as process")
 
     streams = Streams()
@@ -193,8 +192,8 @@ def process_init(tests=False):
 
     mail_queue = MailQueue()
     if tests:
-        mail_queue = test_inserts(mail_queue)
-        mail_queue.print_nodes()
+        mail_queue = test_inserts(mail_queue, tests)
+        #mail_queue.print_nodes()
 
     recv_pipe, send_pipe = Pipe()
     cl = Process(target=comms_loop, args=(send_pipe, ))
@@ -212,7 +211,7 @@ def controls():
 
     print("Connecting to world server...")
     socket = context.socket(zmq.REQ)
-    rc = socket.connect("ipc:///tmp/myserver")
+    rc = socket.connect("ipc:///tmp/mail_queue_ipc")
     print(rc)
 
 
@@ -225,11 +224,15 @@ def controls():
         time.sleep(1)
 
 def get_args():
+    """
+    Get argument data passed from the command line and return a dictionary of
+    the arguments.
+    """
     parser = argparse.ArgumentParser()
 
-    help_text = "Control style celector"
-    parser.add_argument("-p"
-                        , "--process"
+    help_text = """The control selector can be set to either 'process' or 'control'. 'process' will run the main loop of the process. 'control' will send commands to an instance of the process. """
+    parser.add_argument("-s"
+                        , "--selector"
                         , dest="selector"
                         , default=""
                         , help=help_text
@@ -238,26 +241,20 @@ def get_args():
     help_text = "Use -t or --tests to run test inserts on startup."
     parser.add_argument("-t"
                         , "--tests"
+                        , type=int
                         , dest="tests"
-                        , default="False"
+                        , default=0
                         , help=help_text
                         )
 
     return parser.parse_args()
 
-
-
 def main():
-
     args = get_args()
-    #print(args)
+    print(args)
 
-    if args.selector == "process" and args.tests == "True":
-        print("process with tests")
-        process_init(True)
-    elif args.selector == "process" and args.tests == "False":
-        print("process")
-        process_init()
+    if args.selector == "process":
+        process_init(args.tests)
     elif args.selector == "control":
         print("controls")
         controls()
