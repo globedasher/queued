@@ -13,11 +13,12 @@ class Node():
     Node Class.
     """
     next_node = None
-    identifier = 0
+    ident = 0
     value = 0
 
-    def __init__(self, data):
+    def __init__(self, data, ident):
         self.value = data
+        self.ident = ident
 
 
 class MailQueue():
@@ -25,38 +26,83 @@ class MailQueue():
     MailQueue class.
     """
     head = None
-    def insert(self, value):
-        """
-        Insert a value into the queue.
-        """
-        print("Insert", value)
-        node = Node(value)
+
+    def _pop_node(self, ident):
+        #print("_pop_node")
         if not self.head:
-            self.head = node
-        elif node.value < self.head.value:
-            node.next_node = self.head
-            self.head = node
+            return None
+        currentNode = self.head
+        if currentNode.ident == ident:
+            self.head = currentNode.next_node
+            currentNode.next_node = None
+            return currentNode
+        while currentNode:
+            if not currentNode.next_node:
+                return None
+            if currentNode.next_node.ident == ident:
+                removal_target = currentNode.next_node
+                currentNode.next_node = currentNode.next_node.next_node
+                removal_target.next_node = None
+                return currentNode
+            currentNode = currentNode.next_node
+
+        # If no node with that ident is found, return None
+        return None
+
+    def _insert_node(self, value, ident):
+        # Create and insert a node
+        new_node = Node(value, ident)
+        # if no head exists on the queue
+        if not self.head:
+            self.head = new_node
+        # if the new node value is less than the current head
+        elif new_node.value < self.head.value:
+            new_node.next_node = self.head
+            self.head = new_node
+        # else find the location to insert it
         else:
             currentNode = self.head
             while currentNode:
+                # If we get to the end and haven't inserted the node, add it to
+                # then end of the queue
                 if not currentNode.next_node:
-                    currentNode.next_node = node
+                    currentNode.next_node = new_node
                     break
-                elif node.value < currentNode.next_node.value:
-                    node.next_node = currentNode.next_node
-                    currentNode.next_node = node
-                    break
-                elif not currentNode.next_node:
-                    currentNode.next_node = node
+                elif (new_node.value > currentNode.value
+                    and new_node.value < currentNode.next_node.value):
+                    new_node.next_node = currentNode.next_node
+                    currentNode.next_node = new_node
                     break
                 currentNode = currentNode.next_node
+
+    def insert(self, value, ident):
+        """
+        Insert a value into the queue.  If a node with the specified ident is
+        in the queue, it will be removed and a new node will be created based
+        on the new value. If is not in the queue, it will be added at correct
+        location.
+        """
+        print("Insert", value, ident)
+        found_on_next_node = self._pop_node(ident)
+        # if found_on_next_node:
+        #     print("Found node:"
+        #          ,found_on_next_node.value
+        #          ,found_on_next_node.ident
+        #          )
+        self._insert_node(value, ident)
+
 
     def print_nodes(self):
         print("Print Nodes")
         currentNode = self.head
+        node_number = 0
         while currentNode:
-            print(currentNode.value)
+            print("Date:", currentNode.value
+                 ,"Ident:", currentNode.ident
+                 ,"Node number:", node_number
+                 )
             currentNode = currentNode.next_node
+            node_number += 1
 
     def end_node(self):
         print("End Node")
@@ -69,7 +115,7 @@ class MailQueue():
     def expire(self):
         #print("Check for expired node")
         if self.head and self.head.value <= datetime.datetime.now():
-            print("Expiring node", self.head.value)
+            print("Expiring node", self.head.value, self.head.ident)
             self.head = self.head.next_node
         else:
             #print("No nodes to expire")
@@ -122,7 +168,6 @@ class ControlComms():
 
 
 def test_inserts(mail_queue, tests):
-    print("test_inserts")
     value = 0
     #print(value)
     # This is the main loop of the program. One of the functions run by it will
@@ -135,7 +180,8 @@ def test_inserts(mail_queue, tests):
         data = datetime.datetime.now()
         offset = datetime.timedelta(seconds = value + 0)
         data = data + offset
-        mail_queue.insert(data)
+        ident = tests - value
+        mail_queue.insert(data, ident)
     return mail_queue
 
 def comms_loop(send_pipe):
@@ -147,12 +193,12 @@ def comms_loop(send_pipe):
 
     while True:
         message = listen_socket.recv()
-        print("Recieved request: %s" % message)
+        #print("Received request: %s" % message)
         listen_socket.send(b"World")
 
         #print("Here")
         message = message.decode("utf-8")
-        print(message)
+        #print(message)
         if message == "insert":
             #print("Over here")
             send_pipe.send("insert")
@@ -160,7 +206,7 @@ def comms_loop(send_pipe):
 
 def main_loop(mail_queue, streams, recv_pipe):
     print("main_loop")
-
+    ident = 0
     while True:
         # This is the main loop of the program. One of the functions run by it will
         # need to check for any interrupt signals.
@@ -168,11 +214,12 @@ def main_loop(mail_queue, streams, recv_pipe):
             message = recv_pipe.recv()
             print("Received message: %s" % message)
             if message == "insert":
-                print("insert")
+                #print("insert")
                 data = datetime.datetime.now()
                 offset = datetime.timedelta(seconds = 2)
                 data = data + offset
-                mail_queue.insert(data)
+                mail_queue.insert(data, ident)
+                ident += 1
 
         mail_queue.expire()
         time.sleep(.1)
@@ -196,11 +243,12 @@ def process_init(tests):
         #mail_queue.print_nodes()
 
     recv_pipe, send_pipe = Pipe()
-    cl = Process(target=comms_loop, args=(send_pipe, ))
-    cl.start()
+    comms_loop_process = Process(target=comms_loop, args=(send_pipe, ))
+    comms_loop_process.start()
 
-    p = Process(target=main_loop, args=(mail_queue, streams, recv_pipe))
-    p.start()
+    mail_queue_process = Process(target=main_loop
+                       , args=(mail_queue, streams, recv_pipe))
+    mail_queue_process.start()
 
 def controls():
     """
@@ -209,10 +257,10 @@ def controls():
 
     context = zmq.Context()
 
-    print("Connecting to world server...")
+    print("Transmitting commands to process.")
     socket = context.socket(zmq.REQ)
     rc = socket.connect("ipc:///tmp/mail_queue_ipc")
-    print(rc)
+    #print(rc)
 
 
     for request in range(2):
@@ -254,10 +302,18 @@ def main():
     print(args)
 
     if args.selector == "process":
+        #print("process")
         process_init(args.tests)
     elif args.selector == "control":
-        print("controls")
+        #print("controls")
         controls()
+    else:
+        # This else will allow dev to run this script with no args to just run
+        # test insert.
+        test_queue = MailQueue()
+        test_queue = test_inserts(test_queue, 10)
+        test_queue = test_inserts(test_queue, 5)
+        test_queue.print_nodes()
 
     if args.selector != "process":
         print("End")
