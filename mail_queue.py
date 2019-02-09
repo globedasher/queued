@@ -3,9 +3,8 @@
 #
 ###############################################################################
 
-import datetime, signal, subprocess, sys, zmq, time, argparse
+import datetime, signal, subprocess, sys, zmq, time, argparse, logging
 from multiprocessing import Process, Pipe
-from py_core import logger
 
 
 class Node():
@@ -122,50 +121,18 @@ class MailQueue():
             pass
 
 
-class Streams():
-    """
-    stdin, stdout, stderr class.
-    """
-    out_original = ''
-    err_original = ''
-
-    def __init__(self):
-        print("Initializing system.")
-        #self.config_out()
-        #self.config_err()
-
-    def config_out(self):
-        print("config")
-        # Redirect the standard output
-        self.out_original = sys.stdout
-        self.osock = open("output.log", "w")
-        sys.stdout = self.osock
-
-    def config_err(self):
-        print("config")
-        self.err_original = sys.stderr
-        self.fsock = open("error.log", "w")
-        sys.stderr = self.fsock
-
-    def close(self):
-        print("close_streams")
-        if self.out_original:
-            sys.stdout = self.out_original
-        if self.err_original:
-            sys.stderr = self.err_original
-
-    def end_runtime(self, signum, frame):
-        print("\n\nUser ended runtime.")
-        self.close()
-        print("\n\nUser ended runtime.")
-        #print(dir(frame))
-        sys.exit(signum)
-
 
 class ControlComms():
     def __init__(self):
         print("Creating Controls")
 
+def log_config():
+    formatter = '%(asctime)s: %(levelname)s: %(message)s'
+    logging.basicConfig(format=formatter,
+            filename='debug.log',
+            filemode='w',
+            level=logging.DEBUG)
+    logging.info("Logging initialized.")
 
 def test_inserts(mail_queue, tests):
     value = 0
@@ -204,7 +171,7 @@ def comms_loop(send_pipe):
             send_pipe.send("insert")
         #sys.exit()
 
-def main_loop(mail_queue, streams, recv_pipe):
+def main_loop(mail_queue, recv_pipe):
     print("main_loop")
     ident = 0
     while True:
@@ -233,9 +200,7 @@ def main_loop(mail_queue, streams, recv_pipe):
 def process_init(tests):
     print("Starting as process")
 
-    streams = Streams()
 
-    signal.signal(signal.SIGINT, streams.end_runtime)
 
     mail_queue = MailQueue()
     if tests:
@@ -247,7 +212,7 @@ def process_init(tests):
     comms_loop_process.start()
 
     mail_queue_process = Process(target=main_loop
-                       , args=(mail_queue, streams, recv_pipe))
+                       , args=(mail_queue, recv_pipe))
     mail_queue_process.start()
 
 def controls():
@@ -298,6 +263,9 @@ def get_args():
     return parser.parse_args()
 
 def main():
+    # Configure logging
+    log_config()
+    # Get commandline arguments
     args = get_args()
     print(args)
 
